@@ -1,0 +1,7 @@
+from enum import Enum
+
+class SubmissionStatus(Enum):
+    PENDING_RECONCILIATION = "PENDING_RECONCILIATION"
+    APPROVED = "APPROVED"
+    FLAGGED_ANOMALY = "FLAGGED_ANOMALY"
+    DENIED = "DENIED"
