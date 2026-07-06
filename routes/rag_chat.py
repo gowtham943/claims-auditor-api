@@ -9,6 +9,7 @@ from repositories.rag_repository import RAGRepository
 from rag_engine.policy_rag_engine import rag_engine_service
 from config.auth import get_current_user
 from models.user import User
+from config.config_setting import settings
 logger = logging.getLogger("uvicorn.error")
 
 router = APIRouter(prefix="/api/v1/chat", tags=["RAG Chat Engine"])
@@ -68,7 +69,7 @@ async def query_policy_chatbot(
         # We leverage gemini-2.5-flash for real-time latency optimization
         genai_client = genai.Client()
         response = genai_client.models.generate_content(
-            model="gemini-2.5-flash",
+            model=settings.GEMINI_RAG_MODEL,
             contents=prompt_payload,
             config={"system_instruction": system_instruction, "temperature": 0.0}
         )

@@ -13,6 +13,7 @@ class config_setting(BaseSettings):
     DOCLING_SERVICE_URL: str = ""
     GEMINI_API_KEY: str = ""
     GEMINI_EMBEDDING_MODEL: str = "gemini-embedding-001"
+    GEMINI_RAG_MODEL: str = "gemini-2.5-flash"
     GEMINI_EMBEDDING_DIMENSION: int = 3072
 
     #Security
