@@ -1,0 +1,66 @@
+services:
+  db:
+    image: pgvector/pgvector:pg15
+    container_name: claims_auditor_db
+    restart: always
+    environment:
+      POSTGRES_USER: auditor_admin
+      POSTGRES_PASSWORD: password
+      POSTGRES_HOST: db
+      POSTGRES_DB: claims_auditor_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U auditor_admin -d claims_auditor_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - claims-net
+
+  docling_serve:
+    image: quay.io/docling-project/docling-serve-cpu:latest
+    container_name: claims_auditor_docling
+    restart: always
+    ports:
+      - "8001:5001"  # Docling-serve updates listen internally on 5001 by default
+    environment:
+      - OMP_NUM_THREADS=2
+      - DOCLING_SERVE_HOST=0.0.0.0
+      - DOCLING_SERVE_PORT=5001
+    networks:
+      - claims-net
+
+  api:
+    build: 
+      context: .
+    container_name: claims_auditor_api
+    restart: always
+    command: sh -c "sleep 2 && alembic upgrade head && uvicorn main:app --host 0.0.0.0 --port 8000 --reload"
+    working_dir: /app
+    environment:
+      - PYTHONUNBUFFERED=1
+      - DOCLING_SERVICE_URL=http://docling_serve:5001/v1/convert/file
+    env_file:
+      - .env_docker
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+      docling_serve:
+        condition: service_started
+    volumes:
+      - .:/app
+    networks:
+      - claims-net
+
+volumes:
+  pgdata:
+    driver: local
+
+networks:
+  claims-net:
+    driver: bridge
