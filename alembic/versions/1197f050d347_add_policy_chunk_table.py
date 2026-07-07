@@ -120,7 +120,7 @@ def upgrade() -> None:
             table_name='claim_submissions',
             column_name='status',
             varchar_length=100,
-            default_value='PENDING_RECONCILIATION',
+            default_value='PENDING',
             enum_type_name='submissionstatus',
         )
 

@@ -25,6 +25,7 @@ def upgrade() -> None:
     sa.Column('id', sa.Uuid(), nullable=False),
     sa.Column('plan_name', sa.String(length=255), nullable=False),
     sa.Column('plan_type', sa.String(length=50), nullable=False),
+    sa.Column('geography', sa.String(length=20), server_default='WESTERN', nullable=False),
     sa.Column('source_url', sa.String(length=512), nullable=True),
     sa.Column('raw_markdown_layout', sa.String(), nullable=False),
     sa.PrimaryKeyConstraint('id')
@@ -42,7 +43,7 @@ def upgrade() -> None:
     sa.Column('policy_id', sa.Uuid(), nullable=False),
     sa.Column('patient_name', sa.String(length=255), nullable=False),
     sa.Column('claim_metadata', postgresql.JSONB(astext_type=sa.Text()), nullable=False),
-    sa.Column('status', sa.String(length=100), server_default='PENDING_RECONCILIATION', nullable=False),
+    sa.Column('status', sa.String(length=100), server_default='PENDING', nullable=False),
     sa.ForeignKeyConstraint(['policy_id'], ['policy_rulebooks.id'], ondelete='CASCADE'),
     sa.PrimaryKeyConstraint('id')
     )
