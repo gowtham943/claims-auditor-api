@@ -69,7 +69,7 @@ class ClaimRepository:
             .join(PolicyRulebook, ClaimSubmission.policy_id == PolicyRulebook.id)
             .where(
                 ClaimSubmission.user_id == user_id,
-                ClaimSubmission.status != SubmissionStatus.PENDING_RECONCILIATION.value,
+                ClaimSubmission.status != SubmissionStatus.PENDING.value,
             )
             .order_by(ClaimSubmission.patient_name)
         )
@@ -92,7 +92,7 @@ class ClaimRepository:
             .where(
                 ClaimSubmission.id == claim_id,
                 ClaimSubmission.user_id == user_id,
-                ClaimSubmission.status != SubmissionStatus.PENDING_RECONCILIATION.value,
+                ClaimSubmission.status != SubmissionStatus.PENDING.value,
             )
         )
         result = await self.session.execute(statement)

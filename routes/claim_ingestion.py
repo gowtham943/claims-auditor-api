@@ -5,6 +5,8 @@ from typing import Any, Dict
 from fastapi import APIRouter, Depends, UploadFile, File, Form, HTTPException, status, BackgroundTasks
 from sqlmodel.ext.asyncio.session import AsyncSession
 
+from enums.pipeline_step import PipelineStep
+from enums.submission_status import AUDIT_STATUS_LABELS, SubmissionStatus
 from config.database_config import db as db_config
 from ws_manager.connection_manager import socket_manager
 from repositories.policy_repo import PolicyRepository
@@ -66,6 +68,7 @@ async def async_claim_audit_worker(
     file_bytes: bytes,
     filename: str,
     plan_type: str,
+    geography: str,
     db_session_factory
 ):
     """
@@ -77,18 +80,17 @@ async def async_claim_audit_worker(
     try:
         # Step 1: Send Docling Status Message down the WebSocket Megaphone
         await socket_manager.stream_status(
-            claim_id=claim_str, 
-            step="PARSING_CLAIM", 
-            message="Initializing high-performance document extraction via isolated Docling worker container..."
+            claim_id=claim_str,
+            step=PipelineStep.READING_CLAIM.value,
+            message="Reading your claim document.",
         )
         
         claim_markdown = await extraction_service.extract_text(file_bytes, filename)
         
-        # Step 2: Transition live status to AI matching window
         await socket_manager.stream_status(
-            claim_id=claim_str, 
-            step="COGNITIVE_AUDIT", 
-            message="Running deterministic policy validation algorithms through structured Gemini reasoning layer..."
+            claim_id=claim_str,
+            step=PipelineStep.REVIEWING_CLAIM.value,
+            message="Checking your claim against the policy rules.",
         )
         
         # Open an isolated background session context to fetch references and update statuses safely
@@ -108,11 +110,12 @@ async def async_claim_audit_worker(
             audit_report: Dict[str, Any] = await claims_auditor_service.execute_claim_audit(
                 policy_markdown=master_policy_markdown,
                 claim_markdown=claim_markdown,
-                plan_type=plan_type
+                geography=geography,
+                plan_type=plan_type,
             )
             
             # Step 3: Extract structured variables from output schema
-            final_status = audit_report.get("audit_status", "FLAGGED_ANOMALY")
+            final_status = audit_report.get("audit_status", SubmissionStatus.NEEDS_REVIEW.value)
             
             # Pack extracted outputs inside our metadata object fields
             updated_metadata = {
@@ -129,17 +132,20 @@ async def async_claim_audit_worker(
                 user_id=user_id,
             )
             await session.commit()
-            
-            # Step 4: Stream final payload variables down to update active UI panels instantly
-        await socket_manager.stream_status(
-            claim_id=claim_str,
-            step="COMPLETED",
-            message=f"Audit completed successfully. Status derived: {final_status}",
-            payload={
-                **audit_report,
-                "raw_claim_markdown": claim_markdown,
-            },
-        )
+
+            result_label = AUDIT_STATUS_LABELS.get(
+                final_status,
+                "Claim check finished",
+            )
+            await socket_manager.stream_status(
+                claim_id=claim_str,
+                step=PipelineStep.COMPLETE.value,
+                message=f"Check complete. {result_label}.",
+                payload={
+                    **audit_report,
+                    "raw_claim_markdown": claim_markdown,
+                },
+            )
             
     except Exception as background_err:
         logger.error(f"Async worker encountered a fatal crash trace on Claim {claim_str}: {str(background_err)}")
@@ -147,16 +153,18 @@ async def async_claim_audit_worker(
         # Alert connected underwriters about the error pipeline shift immediately
         await socket_manager.stream_status(
             claim_id=claim_str,
-            step="FAILED",
-            message=f"System ingestion failed: {str(background_err)}"
+            step=PipelineStep.FAILED.value,
+            message=f"We could not check this claim. {background_err}",
         )
         
-        # Safely rollback any open database transactions to shield relational state states
         async with db_session_factory() as session:
             claim_repo = ClaimRepository(session)
             await claim_repo.update_claim_status(
                 claim_id=claim_id,
-                dto=ClaimStatusUpdateDTO(status="DENIED", audit_payload={"fatal_ingestion_error": str(background_err)}),
+                dto=ClaimStatusUpdateDTO(
+                    status=SubmissionStatus.INVALID.value,
+                    audit_payload={"fatal_ingestion_error": str(background_err)},
+                ),
                 user_id=user_id,
             )
             await session.commit()
@@ -249,6 +257,7 @@ async def ingest_claim_submission(
             file_bytes=file_bytes,
             filename=filename,
             plan_type=policy_record.plan_type,
+            geography=policy_record.geography,
             db_session_factory=db_config.session_factory,
         )
         

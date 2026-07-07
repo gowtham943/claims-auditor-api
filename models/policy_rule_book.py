@@ -3,6 +3,8 @@ from typing import TYPE_CHECKING, List, Optional
 
 from sqlmodel import Field, Relationship, SQLModel
 
+from enums.insurance_plan import Geography
+
 if TYPE_CHECKING:
     from models.claim_submission import ClaimSubmission
     from models.policy_chunks import PolicyChunk
@@ -31,6 +33,11 @@ class PolicyRulebook(SQLModel, table=True):
     plan_type: str = Field(
         max_length=50,
         nullable=False,
+    )
+    geography: str = Field(
+        max_length=20,
+        nullable=False,
+        default=Geography.WESTERN.value,
     )
     source_url: Optional[str] = Field(
         default=None,

@@ -4,11 +4,12 @@ from typing import Any, Dict
 from fastapi import APIRouter, Depends, UploadFile, File, Form, HTTPException, status, BackgroundTasks
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from config.config_setting import settings
+from enums.pipeline_step import PipelineStep
 from config.database_config import db as db_config
 from ws_manager.connection_manager import socket_manager
 from repositories.policy_repo import PolicyRepository
 from repositories.rag_repository import RAGRepository
+from enums.insurance_plan import validate_geography_and_plan
 from models.schema import PolicyCreateDTO, PolicySummaryDTO
 from services.docling_extraction_service import extraction_service
 from rag_engine.policy_rag_engine import rag_engine_service
@@ -36,18 +37,17 @@ async def async_policy_extraction_worker(
     try:
         # Step 1: Tell user via WebSocket that Docling is crunching pages
         await socket_manager.stream_status(
-            claim_id=policy_str,  # We reuse the ID channel to group socket messages
-            step="PARSING_POLICY",
-            message="Docling is reading the master layout, headers, and cost tables. This may take a minute..."
+            claim_id=policy_str,
+            step=PipelineStep.READING_POLICY.value,
+            message="Reading your policy document. This may take a minute for large files.",
         )
         
-        # Hits the docling microservice container and triggers our text normalization cleanup pipeline
         extracted_markdown = await extraction_service.extract_text(file_bytes, filename)
         
         await socket_manager.stream_status(
             claim_id=policy_str,
-            step="VECTOR_INDEXING",
-            message=f"Slicing Markdown layout by heading nodes and generating {settings.GEMINI_EMBEDDING_MODEL} vectors..."
+            step=PipelineStep.ORGANIZING_POLICY.value,
+            message="Organizing policy sections so claims can be checked against your rules.",
         )
         
         # Generate PolicyChunk rows with embeddings sized to GEMINI_EMBEDDING_DIMENSION
@@ -59,8 +59,8 @@ async def async_policy_extraction_worker(
         # Step 3: Save clean text results onto our target PostgreSQL node
         await socket_manager.stream_status(
             claim_id=policy_str,
-            step="SAVING_DATA",
-            message="Extraction complete! Saving clean Markdown text parameters into the database cache..."
+            step=PipelineStep.SAVING.value,
+            message="Saving your policy. Almost done.",
         )
         
         async with db_session_factory() as session:
@@ -81,12 +81,12 @@ async def async_policy_extraction_worker(
         # Step 4: Tell the UI we are 100% complete
         await socket_manager.stream_status(
             claim_id=policy_str,
-            step="COMPLETED",
-            message="Master policy rules parsed, vectorized, and cached! Context system fully live.",
+            step=PipelineStep.COMPLETE.value,
+            message="Your policy is ready. You can now submit claims against it.",
             payload={
                 "total_layout_characters": len(extracted_markdown),
-                "generated_vector_chunks": len(vector_chunks)
-            }
+                "generated_sections": len(vector_chunks),
+            },
         )
         
     except Exception as background_err:
@@ -94,8 +94,8 @@ async def async_policy_extraction_worker(
         
         await socket_manager.stream_status(
             claim_id=policy_str,
-            step="FAILED",
-            message=f"Policy processing failed: {str(background_err)}"
+            step=PipelineStep.FAILED.value,
+            message=f"We could not process this policy. {background_err}",
         )
         
         # Soft-delete or update status to flag an ingestion error
@@ -121,6 +121,7 @@ async def list_ingested_policies(
         PolicySummaryDTO(
             id=policy.id,
             plan_name=policy.plan_name,
+            geography=policy.geography,
             plan_type=policy.plan_type,
             source_url=policy.source_url,
         )
@@ -133,6 +134,7 @@ async def ingest_policy_rulebook(
     background_tasks: BackgroundTasks,
     session: AsyncSession = Depends(db_config.get_session),
     plan_name: str = Form(...),
+    geography: str = Form(...),
     plan_type: str = Form(...),
     source_url: str | None = Form(None),
     file: UploadFile = File(...),
@@ -143,13 +145,15 @@ async def ingest_policy_rulebook(
     Docling layout parsing tasks to a background thread, and returns a tracking token key.
     """
     try:
+        geo, plan = validate_geography_and_plan(geography, plan_type)
         policy_id = uuid.uuid4()
         file_bytes = await file.read()
         
         dto = PolicyCreateDTO(
             id=policy_id,
             plan_name=plan_name,
-            plan_type=plan_type,
+            geography=geo.value,
+            plan_type=plan.value,
             source_url=source_url
         )
         
@@ -180,6 +184,11 @@ async def ingest_policy_rulebook(
             "message": "Master document submitted. Ingestion and parsing initiated in background loops."
         }
         
+    except ValueError as validation_err:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(validation_err),
+        ) from validation_err
     except Exception as exc:
         await session.rollback()
         raise HTTPException(

@@ -18,12 +18,14 @@ class UserUpdateDTO(SQLModel):
 class PolicyCreateDTO(SQLModel):
     id: Optional[uuid.UUID] = None
     plan_name: str
+    geography: str
     plan_type: str
     source_url: Optional[str] = None
 
 
 class PolicyUpdateDTO(SQLModel):
     plan_name: Optional[str] = None
+    geography: Optional[str] = None
     plan_type: Optional[str] = None
     source_url: Optional[str] = None
 
@@ -31,6 +33,7 @@ class PolicyUpdateDTO(SQLModel):
 class PolicySummaryDTO(SQLModel):
     id: uuid.UUID
     plan_name: str
+    geography: str
     plan_type: str
     source_url: Optional[str] = None
 
@@ -40,7 +43,7 @@ class ClaimCreateDTO(SQLModel):
     policy_id: uuid.UUID
     patient_name: str
     claim_metadata: Dict[str, Any] = {}
-    status: str = "PENDING_RECONCILIATION"
+    status: str = "PENDING"
 
 
 class ClaimStatusUpdateDTO(SQLModel):
