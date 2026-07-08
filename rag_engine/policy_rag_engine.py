@@ -10,6 +10,7 @@ import logging
 
 logger = logging.getLogger("uvicorn.error")
 
+
 class PolicyRAGEngine:
     def __init__(self):
         self.client = genai.Client()
@@ -24,7 +25,6 @@ class PolicyRAGEngine:
         )
 
     async def generate_text_embedding(self, text: str) -> List[float]:
-        """Fetches vector dimensions via Google Cloud infrastructure maps."""
         response = self.client.models.embed_content(
             model=self.embedding_model,
             contents=text,
@@ -32,30 +32,60 @@ class PolicyRAGEngine:
         )
         return response.embeddings[0].values
 
+    async def _embed_batch_with_retry(self, batch_texts: List[str], *, batch_start: int):
+        retries = 5
+        delay = 60.0
+
+        while retries > 0:
+            try:
+                return self.client.models.embed_content(
+                    model=self.embedding_model,
+                    contents=batch_texts,
+                    config=self._embed_config(),
+                )
+            except Exception as api_err:
+                err_str = str(api_err)
+                if "429" in err_str or "RESOURCE_EXHAUSTED" in err_str:
+                    retries -= 1
+                    logger.warning(
+                        "Embedding rate limit at batch index %s. Retries left: %s. Backing off %.1fs...",
+                        batch_start,
+                        retries,
+                        delay,
+                    )
+                    await asyncio.sleep(delay)
+                    delay *= 1.5
+                    continue
+                raise api_err
+
+        raise RuntimeError(
+            f"Failed to calculate embeddings for batch index {batch_start} after maximum retry attempts."
+        )
+
     def segment_markdown_by_headers(self, markdown_text: str) -> List[Dict[str, str]]:
         """
         A layout-aware structural chunker that segments data at Markdown heading levels
         while keeping section contextual blocks unbroken for the vector DB.
         """
         sections = []
-        # Matches markdown headers (e.g., # Section, ## Co-pays)
+        # Matches markdown headers (e.g., # Section)
         pattern = r"(^#{1,4}\s+.*$)"
         parts = re.split(pattern, markdown_text, flags=re.MULTILINE)
-        
+
         current_heading = "Introduction/General Terms"
-        
+
         for part in parts:
             part_stripped = part.strip()
             if not part_stripped:
                 continue
-                
+
             if re.match(pattern, part_stripped):
                 current_heading = part_stripped
             else:
                 # Group section bodies with their active header paths
                 sections.append({
                     "heading": current_heading,
-                    "text": f"{current_heading}\n{part_stripped}"
+                    "text": f"{current_heading}\n{part_stripped}",
                 })
         return sections
 
@@ -110,38 +140,8 @@ class PolicyRAGEngine:
         for i in range(0, total_segments, BATCH_SIZE):
             sub_batch = text_segments[i:i + BATCH_SIZE]
             batch_texts = [segment["text"] for segment in sub_batch]
-            
-            # 🚨 SELF-HEALING RETRY LIFECYCLE 
-            retries = 5
-            delay = 60.0  # Start with a base delay of 10 seconds when a 429 hits
-            success = False
-            response = None
 
-            while retries > 0 and not success:
-                try:
-                    logger.info(f"Shipping micro-batch ({i} to {min(i + BATCH_SIZE, total_segments)}) to Gemini...")
-                    
-                    response = self.client.models.embed_content(
-                        model=self.embedding_model,
-                        contents=batch_texts,
-                        config=self._embed_config(),
-                    )
-                    success = True  # If this clears, break the retry cycle safely!
-                    
-                except Exception as api_err:
-                    err_str = str(api_err)
-                    if "429" in err_str or "RESOURCE_EXHAUSTED" in err_str:
-                        retries -= 1
-                        logger.warning(f"Rate limit hit at chunk index {i}. Retries remaining: {retries}. Backing off for {delay}s...")
-                        await asyncio.sleep(delay)
-                        delay *= 1.5  # Increase wait time exponentially for the next attempt
-                    else:
-                        # If it is a real syntactic issue (not a rate limit), fail immediately
-                        logger.error(f"Fatal API exception unhandled at index {i}: {err_str}")
-                        raise api_err
-
-            if not success:
-                raise RuntimeError(f"Failed to calculate embeddings for batch index {i} after maximum retry attempts.")
+            response = await self._embed_batch_with_retry(batch_texts, batch_start=i)
 
             # Model mapping matrix construction upon successful API response
             for j, segment in enumerate(sub_batch):

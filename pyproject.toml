@@ -22,3 +22,16 @@ dependencies = [
     "uvicorn>=0.50.0",
     "websockets>=16.0",
 ]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3.0",
+    "pytest-asyncio>=0.25.0",
+]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+pythonpath = ["."]
+markers = [
+    "rag_eval: live RAG quality evaluation requiring GEMINI_API_KEY",
+]

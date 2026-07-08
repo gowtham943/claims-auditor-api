@@ -1,0 +1,99 @@
+[
+  {
+    "id": "total_procedures",
+    "question": "How many total procedures are listed in the package rate ledger?",
+    "ground_truth": "The ledger reports 3,403 total procedures.",
+    "expected_answer_contains": ["3,403", "3403"],
+    "expected_context_keywords": ["3,403", "TOTAL PROCEDURES", "Ingested Procedures"],
+    "min_scores": {
+      "context_relevance": 0.6,
+      "faithfulness": 0.7,
+      "answer_relevance": 0.7
+    }
+  },
+  {
+    "id": "max_reference_rate",
+    "question": "What is the maximum reference rate (A1) in the system executive summary?",
+    "ground_truth": "The maximum reference rate (A1) is ₹500,000.",
+    "expected_answer_contains": ["500,000", "500000"],
+    "expected_context_keywords": ["MAX REFERENCE RATE", "500,000", "A1"],
+    "min_scores": {
+      "context_relevance": 0.6,
+      "faithfulness": 0.7,
+      "answer_relevance": 0.7
+    }
+  },
+  {
+    "id": "category_count",
+    "question": "How many categories are in the package rate master ledger?",
+    "ground_truth": "There are 42 categories.",
+    "expected_answer_contains": ["42"],
+    "expected_context_keywords": ["CATEGORIES", "42"],
+    "min_scores": {
+      "context_relevance": 0.6,
+      "faithfulness": 0.7,
+      "answer_relevance": 0.7
+    }
+  },
+  {
+    "id": "avg_base_rate",
+    "question": "What is the average base rate shown in the executive summary?",
+    "ground_truth": "The average base rate is ₹33,664.",
+    "expected_answer_contains": ["33,664", "33664"],
+    "expected_context_keywords": ["AVG BASE RATE", "33,664"],
+    "min_scores": {
+      "context_relevance": 0.6,
+      "faithfulness": 0.7,
+      "answer_relevance": 0.7
+    }
+  },
+  {
+    "id": "cmu0001_rate",
+    "question": "What is the Tier 1 (A1) package rate for CMU0001 coronary balloon angioplasty?",
+    "ground_truth": "CMU0001 coronary balloon angioplasty has a Tier 1 (A1) rate of ₹50,400.",
+    "expected_answer_contains": ["50,400", "50400", "CMU0001"],
+    "expected_context_keywords": ["CMU0001", "50,400", "CORONARY BALLOON"],
+    "min_scores": {
+      "context_relevance": 0.6,
+      "faithfulness": 0.7,
+      "answer_relevance": 0.7
+    }
+  },
+  {
+    "id": "interventional_radiology_max",
+    "question": "Which medical category has a maximum reference rate of ₹500,000 in the category breakdown?",
+    "ground_truth": "Interventional Radiology has a maximum reference rate of ₹500,000.",
+    "expected_answer_contains": ["INTERVENTIONAL RADIOLOGY", "500,000"],
+    "expected_context_keywords": ["INTERVENTIONAL RADIOLOGY", "500,000"],
+    "min_scores": {
+      "context_relevance": 0.6,
+      "faithfulness": 0.7,
+      "answer_relevance": 0.7
+    }
+  },
+  {
+    "id": "medical_oncology_packages",
+    "question": "How many packages are listed under Medical Oncology and what is its average A1 rate?",
+    "ground_truth": "Medical Oncology has 714 packages with an average A1 rate of ₹13,486.",
+    "expected_answer_contains": ["714", "13,486"],
+    "expected_context_keywords": ["MEDICAL ONCOLOGY", "714", "13,486"],
+    "min_scores": {
+      "context_relevance": 0.6,
+      "faithfulness": 0.7,
+      "answer_relevance": 0.7
+    }
+  },
+  {
+    "id": "out_of_scope_copay",
+    "question": "What is the PPO specialist copay percentage for out-of-network visits?",
+    "ground_truth": "This information is not present in the package rate ledger document.",
+    "expected_answer_contains": ["cannot verify", "not", "PPO", "copay"],
+    "expected_context_keywords": [],
+    "expects_refusal": true,
+    "min_scores": {
+      "context_relevance": 0.4,
+      "faithfulness": 0.7,
+      "answer_relevance": 0.6
+    }
+  }
+]
