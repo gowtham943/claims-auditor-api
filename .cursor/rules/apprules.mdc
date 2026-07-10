@@ -1,0 +1,13 @@
+---
+alwaysApply: true
+DO's (Mandatory Implementation Patterns)
+* Use Explicit Typing Everywhere: Every function signature must have strict type hints for arguments and explicit return types (e.g., def get_user(id: int) -> UserResponse | None:).
+* Leverage Async/Await Properly: Use async def for routers and database calls if using an async driver (like asyncpg). Use standard def only for blocking CPU-bound tasks.
+* Use Pydantic v2 Features: Use model_config = ConfigDict(from_attributes=True) instead of the deprecated orm_mode = True for ORM conversion.
+* Handle Exceptions at the Service Layer: Catch errors early and raise native FastAPI HTTPException blocks inside services or routers. Ensure clean error messages.
+
+DON'Ts (Forbidden Implementations)
+* No Raw SQL in Routers: Never write SQLAlchemy query chains (like .query(), .filter(), or select()) inside files under the routers/ folder.
+* No from module import * Wildcards: Never generate wildcard imports. All imports must explicitly state the classes or functions being pulled into the file.
+* No Hardcoded Global Variables: Do not place API keys, database URLs, or secret keys directly in the code files. They must be routed through the Settings class via Pydantic.
+---
